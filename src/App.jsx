@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import SortFilter from './components/SortFilter';
 import StationList from './components/StationList';
-import MapModal from './components/MapModal';
 import {
   fetchNearbyStations,
   getCurrentPosition,
@@ -17,7 +16,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [selectedStation, setSelectedStation] = useState(null);
 
   // 필터 상태
   const [fuelType, setFuelType] = useState('D047');   // 기본: 경유
@@ -140,11 +138,16 @@ export default function App() {
         <StationList
           stations={sorted}
           fuelLabel={FUEL_TYPES[fuelType]}
-          onStationClick={setSelectedStation}
+          onStationClick={(s) => {
+            const url = `tmap://search?name=${encodeURIComponent(s.name)}&lon=${s.lon}&lat=${s.lat}`;
+            const fallback = `https://tmap.life/map?lon=${s.lon}&lat=${s.lat}&name=${encodeURIComponent(s.name)}`;
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = url;
+            document.body.appendChild(iframe);
+            setTimeout(() => { document.body.removeChild(iframe); window.open(fallback, '_blank'); }, 300);
+          }}
         />
-      )}
-
-      <MapModal station={selectedStation} onClose={() => setSelectedStation(null)} />
 
       {/* 초기 안내 */}
       {!loading && !userPos && !error && (
