@@ -162,13 +162,7 @@ export default function App() {
             <li>✅ 반경 500m ~ 5km 선택</li>
             <li>✅ 최저가 주유소 강조 표시</li>
           </ul>
-          <p className="api-note">
-            💡 오피넷 API 키가 필요합니다.{' '}
-            <a href="https://www.opinet.co.kr" target="_blank" rel="noreferrer">
-              opinet.co.kr
-            </a>
-            에서 무료 발급 후 <code>.env</code> 파일에 설정하세요.
-          </p>
+
         </div>
       )}
     </div>
