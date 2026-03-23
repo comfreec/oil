@@ -1,3 +1,15 @@
+import { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Leaflet 기본 마커 아이콘 경로 수정 (Vite 빌드 이슈)
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
 function openTmap(name, lat, lon) {
   const appUrl = `tmap://search?name=${encodeURIComponent(name)}&lon=${lon}&lat=${lat}`;
   const webUrl = `https://tmap.life/map?lon=${lon}&lat=${lat}&name=${encodeURIComponent(name)}`;
@@ -19,14 +31,35 @@ function openNaverMap(name, lat, lon) {
   window.open(`https://map.naver.com/v5/search/${encodeURIComponent(name)}?c=${lon},${lat},15,0,0,0,dh`, '_blank');
 }
 
+function LeafletMap({ lat, lon, name }) {
+  const mapRef = useRef(null);
+  const instanceRef = useRef(null);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    // 이미 초기화된 경우 제거 후 재생성
+    if (instanceRef.current) {
+      instanceRef.current.remove();
+    }
+    const map = L.map(mapRef.current, { zoomControl: true }).setView([lat, lon], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+    }).addTo(map);
+    L.marker([lat, lon]).addTo(map).bindPopup(name).openPopup();
+    instanceRef.current = map;
+
+    return () => {
+      instanceRef.current?.remove();
+      instanceRef.current = null;
+    };
+  }, [lat, lon, name]);
+
+  return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
+}
+
 export default function MapModal({ station, onClose }) {
   if (!station) return null;
   const { name, brand, lat, lon, price, distance } = station;
-
-  // Google Maps Embed - API 키 불필요, 무료
-  const googleEmbedUrl =
-    `https://maps.google.com/maps?q=${lat},${lon}&z=16&output=embed&hl=ko`;
-
   const distLabel = distance < 1000
     ? `${Math.round(distance)}m`
     : `${(distance / 1000).toFixed(1)}km`;
@@ -44,21 +77,11 @@ export default function MapModal({ station, onClose }) {
           )}
         </div>
 
-        {/* Google Maps iframe 지도 */}
+        {/* OpenStreetMap Leaflet 지도 */}
         <div className="map-preview">
-          <iframe
-            title={name}
-            src={googleEmbedUrl}
-            width="100%"
-            height="100%"
-            style={{ border: 0 }}
-            allowFullScreen
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
+          <LeafletMap lat={lat} lon={lon} name={name} />
         </div>
 
-        {/* 지도 앱 연동 버튼 */}
         <div className="map-buttons">
           <button className="map-btn tmap" onClick={() => openTmap(name, lat, lon)}>
             <span>🚗</span> 티맵 길찾기
