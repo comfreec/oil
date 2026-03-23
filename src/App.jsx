@@ -20,7 +20,7 @@ export default function App() {
   const [selectedStation, setSelectedStation] = useState(null);
 
   // 필터 상태
-  const [fuelType, setFuelType] = useState('B027');   // 기본: 휘발유
+  const [fuelType, setFuelType] = useState('D047');   // 기본: 경유
   const [radius, setRadius] = useState(2000);          // 기본: 2km
   const [sortKey, setSortKey] = useState('price_asc'); // 기본: 가격 낮은순
 
