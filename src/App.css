@@ -439,6 +439,12 @@ body {
   color: #888;
 }
 
+.modal-address {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 2px;
+}
+
 .modal-price {
   font-size: 1rem;
   font-weight: 700;

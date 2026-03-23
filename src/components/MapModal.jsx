@@ -1,14 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-// Leaflet 기본 마커 아이콘 경로 수정 (Vite 빌드 이슈)
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
+
+// OpenStreetMap Nominatim으로 주소 → 정확한 WGS84 좌표 변환 (무료, 키 불필요)
+async function geocodeAddress(address, name) {
+  // 주소 + 주유소명으로 검색 (한국 한정)
+  const query = encodeURIComponent(`${address} ${name}`);
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${query}&countrycodes=kr&limit=1&format=json`,
+    { headers: { 'Accept-Language': 'ko' } }
+  );
+  const data = await res.json();
+  if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+
+  // 주소만으로 재시도
+  const res2 = await fetch(
+    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&countrycodes=kr&limit=1&format=json`,
+    { headers: { 'Accept-Language': 'ko' } }
+  );
+  const data2 = await res2.json();
+  if (data2.length > 0) return { lat: parseFloat(data2[0].lat), lon: parseFloat(data2[0].lon) };
+
+  return null;
+}
 
 function openTmap(name, lat, lon) {
   const appUrl = `tmap://search?name=${encodeURIComponent(name)}&lon=${lon}&lat=${lat}`;
@@ -17,10 +38,7 @@ function openTmap(name, lat, lon) {
   iframe.style.display = 'none';
   iframe.src = appUrl;
   document.body.appendChild(iframe);
-  setTimeout(() => {
-    document.body.removeChild(iframe);
-    window.open(webUrl, '_blank');
-  }, 300);
+  setTimeout(() => { document.body.removeChild(iframe); window.open(webUrl, '_blank'); }, 300);
 }
 
 function openKakaoMap(name, lat, lon) {
@@ -37,21 +55,14 @@ function LeafletMap({ lat, lon, name }) {
 
   useEffect(() => {
     if (!mapRef.current) return;
-    // 이미 초기화된 경우 제거 후 재생성
-    if (instanceRef.current) {
-      instanceRef.current.remove();
-    }
-    const map = L.map(mapRef.current, { zoomControl: true }).setView([lat, lon], 16);
+    if (instanceRef.current) { instanceRef.current.remove(); }
+    const map = L.map(mapRef.current).setView([lat, lon], 17);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
+      attribution: '© OpenStreetMap',
     }).addTo(map);
     L.marker([lat, lon]).addTo(map).bindPopup(name).openPopup();
     instanceRef.current = map;
-
-    return () => {
-      instanceRef.current?.remove();
-      instanceRef.current = null;
-    };
+    return () => { instanceRef.current?.remove(); instanceRef.current = null; };
   }, [lat, lon, name]);
 
   return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
@@ -59,10 +70,26 @@ function LeafletMap({ lat, lon, name }) {
 
 export default function MapModal({ station, onClose }) {
   if (!station) return null;
-  const { name, brand, lat, lon, price, distance } = station;
+  const { name, brand, address, price, distance } = station;
+
+  const [coords, setCoords] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setCoords(null);
+    if (!address) { setLoading(false); return; }
+    geocodeAddress(address, name)
+      .then((c) => setCoords(c))
+      .finally(() => setLoading(false));
+  }, [address, name]);
+
   const distLabel = distance < 1000
     ? `${Math.round(distance)}m`
     : `${(distance / 1000).toFixed(1)}km`;
+
+  const mapLat = coords?.lat;
+  const mapLon = coords?.lon;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -72,24 +99,26 @@ export default function MapModal({ station, onClose }) {
         <div className="modal-header">
           <h2>{name}</h2>
           <p className="modal-brand">{brand}</p>
-          {price > 0 && (
-            <p className="modal-price">{price.toLocaleString()}원 · {distLabel}</p>
+          {address && <p className="modal-address">{address}</p>}
+          {price > 0 && <p className="modal-price">{price.toLocaleString()}원 · {distLabel}</p>}
+        </div>
+
+        <div className="map-preview">
+          {loading && <div className="map-fallback">🗺️ 지도 불러오는 중...</div>}
+          {!loading && mapLat && <LeafletMap lat={mapLat} lon={mapLon} name={name} />}
+          {!loading && !mapLat && (
+            <div className="map-fallback">📍 지도를 불러올 수 없습니다</div>
           )}
         </div>
 
-        {/* OpenStreetMap Leaflet 지도 */}
-        <div className="map-preview">
-          <LeafletMap lat={lat} lon={lon} name={name} />
-        </div>
-
         <div className="map-buttons">
-          <button className="map-btn tmap" onClick={() => openTmap(name, lat, lon)}>
+          <button className="map-btn tmap" onClick={() => openTmap(name, mapLat ?? 37.5, mapLon ?? 127.0)}>
             <span>🚗</span> 티맵 길찾기
           </button>
-          <button className="map-btn kakao" onClick={() => openKakaoMap(name, lat, lon)}>
+          <button className="map-btn kakao" onClick={() => openKakaoMap(name, mapLat ?? 37.5, mapLon ?? 127.0)}>
             <span>🗺️</span> 카카오맵
           </button>
-          <button className="map-btn naver" onClick={() => openNaverMap(name, lat, lon)}>
+          <button className="map-btn naver" onClick={() => openNaverMap(name, mapLat ?? 37.5, mapLon ?? 127.0)}>
             <span>📍</span> 네이버지도
           </button>
         </div>

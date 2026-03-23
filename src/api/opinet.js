@@ -234,10 +234,11 @@ export async function fetchNearbyStations(lat, lon, radius, prodcd = 'B027') {
       name:     getXMLValue(item, 'OS_NM'),
       brand:    BRAND_MAP[brandCode] || brandCode,
       brandCode,
+      address:  getXMLValue(item, 'VAN_ADR'),
       price:    parseInt(getXMLValue(item, 'PRICE'), 10) || 0,
       distance: parseFloat(getXMLValue(item, 'DISTANCE')) || 0,
       katecX, katecY,
-      lat, lon,  // WGS84 - 지도/티맵 연동용
+      lat, lon,
     };
   });
 }
