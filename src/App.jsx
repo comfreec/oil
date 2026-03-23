@@ -148,6 +148,7 @@ export default function App() {
             setTimeout(() => { document.body.removeChild(iframe); window.open(fallback, '_blank'); }, 300);
           }}
         />
+      )}
 
       {/* 초기 안내 */}
       {!loading && !userPos && !error && (
