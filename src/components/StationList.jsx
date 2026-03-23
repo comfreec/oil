@@ -22,7 +22,7 @@ function formatDist(m) {
   return `${(m / 1000).toFixed(1)}km`;
 }
 
-export default function StationList({ stations, fuelLabel }) {
+export default function StationList({ stations, fuelLabel, onStationClick }) {
   if (!stations.length) {
     return (
       <div className="empty-state">
@@ -43,7 +43,7 @@ export default function StationList({ stations, fuelLabel }) {
         const isCheapest = minPrice && station.price === minPrice;
 
         return (
-          <div key={station.id} className={`station-card ${isCheapest ? 'cheapest' : ''}`}>
+          <div key={station.id} className={`station-card ${isCheapest ? 'cheapest' : ''}`} onClick={() => onStationClick(station)} style={{cursor:'pointer'}}>
             <div className="rank">{idx + 1}</div>
 
             <div className="station-info">

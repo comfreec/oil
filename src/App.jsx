@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import SortFilter from './components/SortFilter';
 import StationList from './components/StationList';
+import MapModal from './components/MapModal';
 import {
   fetchNearbyStations,
   getCurrentPosition,
@@ -16,6 +17,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [selectedStation, setSelectedStation] = useState(null);
 
   // 필터 상태
   const [fuelType, setFuelType] = useState('B027');   // 기본: 휘발유
@@ -138,8 +140,11 @@ export default function App() {
         <StationList
           stations={sorted}
           fuelLabel={FUEL_TYPES[fuelType]}
+          onStationClick={setSelectedStation}
         />
       )}
+
+      <MapModal station={selectedStation} onClose={() => setSelectedStation(null)} />
 
       {/* 초기 안내 */}
       {!loading && !userPos && !error && (
