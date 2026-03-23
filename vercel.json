@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/datago/:path*",
+      "destination": "https://api.data.go.kr/:path*"
+    }
+  ]
+}
