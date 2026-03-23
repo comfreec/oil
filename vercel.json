@@ -1,8 +1,8 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/datago/:path*",
-      "destination": "https://api.data.go.kr/:path*"
+  "functions": {
+    "api/stations.js": {
+      "memory": 128,
+      "maxDuration": 10
     }
-  ]
+  }
 }

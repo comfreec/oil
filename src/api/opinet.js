@@ -13,8 +13,8 @@
 
 const API_KEY = import.meta.env.VITE_OPINET_API_KEY;
 
-// Vite proxy를 통해 CORS 우회
-const BASE_URL = '/api/datago/B553530/OilStationService/getAroundStationList';
+// Vercel serverless function 호출
+const BASE_URL = '/api/stations';
 
 export const FUEL_TYPES = {
   B027: '휘발유',
@@ -88,12 +88,10 @@ function getXMLValue(el, tag) {
  */
 export async function fetchNearbyStations(x, y, radius, prodcd = 'B027') {
   const params = new URLSearchParams({
-    serviceKey: API_KEY,
     x,
     y,
     radius,
     prodcd,
-    sort: 1,
   });
 
   const res = await fetch(`${BASE_URL}?${params}`);
