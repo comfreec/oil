@@ -1,19 +1,11 @@
 /**
- * 공공데이터포털 - 한국석유공사_반경 내 주유소 오픈 API
- * https://www.data.go.kr
+ * 오피넷 반경 내 주유소 API
+ * https://www.opinet.co.kr/api/aroundAll.do
  *
- * 파라미터:
- *   serviceKey : 발급받은 API 키 (인코딩 키)
- *   x          : 경도 (WGS84)
- *   y          : 위도 (WGS84)
- *   radius     : 반경 (단위: m, 최대 5000)
- *   prodcd     : 유종 (B027=휘발유, D047=경유, K015=등유, C004=LPG)
- *   sort       : 정렬 (1=가격순, 2=거리순)
+ * 좌표계: KATEC (Korea 5186)
+ * WGS84(위경도) → KATEC 변환 필요
  */
 
-const API_KEY = import.meta.env.VITE_OPINET_API_KEY;
-
-// Vercel serverless function 호출
 const BASE_URL = '/api/stations';
 
 export const FUEL_TYPES = {
@@ -39,7 +31,7 @@ export const SORT_OPTIONS = [
   { value: 'name_asc',   label: '이름순' },
 ];
 
-/** Haversine 거리 계산 (km) */
+/** Haversine 거리 계산 (km) - WGS84 기준 */
 export function haversineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -50,6 +42,73 @@ export function haversineDistance(lat1, lon1, lat2, lon2) {
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * WGS84 → KATEC 좌표 변환
+ * 오피넷 API는 KATEC(카텍) 좌표계를 사용
+ */
+export function wgs84ToKatec(lat, lon) {
+  const d2r = Math.PI / 180;
+
+  // GRS80 타원체
+  const a = 6378137.0;
+  const f = 1 / 298.257222101;
+  const b = a * (1 - f);
+  const e2 = (a * a - b * b) / (a * a);
+
+  // KATEC 파라미터
+  const lat0 = 38.0 * d2r;
+  const lon0 = 128.0 * d2r;
+  const k0 = 0.9999;
+  const dx = 400000;
+  const dy = 600000;
+
+  const phi = lat * d2r;
+  const lam = lon * d2r;
+
+  const N = a / Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+  const T = Math.tan(phi) ** 2;
+  const C = (e2 / (1 - e2)) * Math.cos(phi) ** 2;
+  const A = Math.cos(phi) * (lam - lon0);
+
+  const e4 = e2 * e2;
+  const e6 = e4 * e2;
+  const M =
+    a *
+    ((1 - e2 / 4 - (3 * e4) / 64 - (5 * e6) / 256) * phi -
+      ((3 * e2) / 8 + (3 * e4) / 32 + (45 * e6) / 1024) * Math.sin(2 * phi) +
+      ((15 * e4) / 256 + (45 * e6) / 1024) * Math.sin(4 * phi) -
+      ((35 * e6) / 3072) * Math.sin(6 * phi));
+
+  const M0 =
+    a *
+    ((1 - e2 / 4 - (3 * e4) / 64 - (5 * e6) / 256) * lat0 -
+      ((3 * e2) / 8 + (3 * e4) / 32 + (45 * e6) / 1024) * Math.sin(2 * lat0) +
+      ((15 * e4) / 256 + (45 * e6) / 1024) * Math.sin(4 * lat0) -
+      ((35 * e6) / 3072) * Math.sin(6 * lat0));
+
+  const x =
+    dx +
+    k0 *
+      N *
+      (A +
+        ((1 - T + C) * A ** 3) / 6 +
+        ((5 - 18 * T + T * T + 72 * C - 58 * (e2 / (1 - e2))) * A ** 5) / 120);
+
+  const y =
+    dy +
+    k0 *
+      (M -
+        M0 +
+        N *
+          Math.tan(phi) *
+          (A ** 2 / 2 +
+            ((5 - T + 9 * C + 4 * C * C) * A ** 4) / 24 +
+            ((61 - 58 * T + T * T + 600 * C - 330 * (e2 / (1 - e2))) * A ** 6) /
+              720));
+
+  return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
 }
 
 /** 현재 위치 가져오기 */
@@ -66,79 +125,66 @@ export function getCurrentPosition() {
   });
 }
 
-/**
- * XML 파싱 헬퍼
- */
-function parseXML(xmlText) {
-  const parser = new DOMParser();
-  return parser.parseFromString(xmlText, 'text/xml');
-}
-
 function getXMLValue(el, tag) {
   const node = el.querySelector(tag);
   return node ? node.textContent.trim() : '';
 }
 
+/** 브랜드 코드 → 이름 */
+const BRAND_MAP = {
+  SKE: 'SK에너지', GSC: 'GS칼텍스', SOL: 'S-OIL',
+  HDO: '현대오일뱅크', RTO: '자영알뜰', RTX: '고속도로알뜰',
+  NHO: '농협알뜰', ETC: '자영', E1G: 'E1', SKG: 'SK가스',
+};
+
 /**
  * 반경 내 주유소 조회
- * @param {number} x - 경도
- * @param {number} y - 위도
+ * @param {number} lat - WGS84 위도
+ * @param {number} lon - WGS84 경도
  * @param {number} radius - 반경 (m)
  * @param {string} prodcd - 유종 코드
  */
-export async function fetchNearbyStations(x, y, radius, prodcd = 'B027') {
-  const params = new URLSearchParams({
-    x,
-    y,
-    radius,
-    prodcd,
-  });
+export async function fetchNearbyStations(lat, lon, radius, prodcd = 'B027') {
+  const { x, y } = wgs84ToKatec(lat, lon);
 
+  const params = new URLSearchParams({ x, y, radius, prodcd });
   const res = await fetch(`${BASE_URL}?${params}`);
   if (!res.ok) throw new Error(`API 오류: ${res.status}`);
 
   const text = await res.text();
-  const xml = parseXML(text);
+  const xml = new DOMParser().parseFromString(text, 'text/xml');
 
-  // 에러 응답 체크
-  const errMsg = xml.querySelector('errMsg');
-  if (errMsg && errMsg.textContent !== 'OK') {
-    throw new Error(`API 오류: ${errMsg.textContent}`);
-  }
+  const parseErr = xml.querySelector('parsererror');
+  if (parseErr) throw new Error('응답 파싱 오류. API 키를 확인해주세요.');
 
   const items = xml.querySelectorAll('OIL');
+  if (!items.length) return [];
 
-  return Array.from(items).map((item) => ({
-    id:      getXMLValue(item, 'UNI_ID'),
-    name:    getXMLValue(item, 'OS_NM'),
-    brand:   getXMLValue(item, 'POLL_DIV_NM'),
-    address: getXMLValue(item, 'VAN_ADR'),
-    price:   parseInt(getXMLValue(item, 'PRICE'), 10) || 0,
-    x:       parseFloat(getXMLValue(item, 'GIS_X_COOR')),
-    y:       parseFloat(getXMLValue(item, 'GIS_Y_COOR')),
-    isSelf:    getXMLValue(item, 'SELF_YN') === 'Y',
-    isCarWash: getXMLValue(item, 'CAR_WASH_YN') === 'Y',
-    isCVS:     getXMLValue(item, 'CVS_YN') === 'Y',
-  }));
+  return Array.from(items).map((item) => {
+    const brandCode = getXMLValue(item, 'POLL_DIV_CO');
+    return {
+      id:       getXMLValue(item, 'UNI_ID'),
+      name:     getXMLValue(item, 'OS_NM'),
+      brand:    BRAND_MAP[brandCode] || brandCode,
+      brandCode,
+      price:    parseInt(getXMLValue(item, 'PRICE'), 10) || 0,
+      distance: parseFloat(getXMLValue(item, 'DISTANCE')) || 0,
+      // KATEC 좌표 (거리 계산용으로 API 제공 DISTANCE 사용)
+      katecX:   parseFloat(getXMLValue(item, 'GIS_X_COOR')),
+      katecY:   parseFloat(getXMLValue(item, 'GIS_Y_COOR')),
+    };
+  });
 }
 
 /** 클라이언트 정렬 */
-export function sortStations(stations, sortKey, userLat, userLon) {
+export function sortStations(stations, sortKey) {
   return [...stations].sort((a, b) => {
     switch (sortKey) {
       case 'price_asc':  return (a.price || 9999) - (b.price || 9999);
       case 'price_desc': return (b.price || 0) - (a.price || 0);
-      case 'dist_asc': {
-        const da = haversineDistance(userLat, userLon, a.y, a.x);
-        const db = haversineDistance(userLat, userLon, b.y, b.x);
-        return da - db;
-      }
-      case 'dist_desc': {
-        const da = haversineDistance(userLat, userLon, a.y, a.x);
-        const db = haversineDistance(userLat, userLon, b.y, b.x);
-        return db - da;
-      }
-      case 'name_asc': return a.name.localeCompare(b.name, 'ko');
+      case 'dist_asc':   return a.distance - b.distance;
+      case 'dist_desc':  return b.distance - a.distance;
+      case 'name_asc':   return a.name.localeCompare(b.name, 'ko');
       default: return 0;
     }
   });

@@ -32,7 +32,7 @@ export default function App() {
   // 정렬 적용
   useEffect(() => {
     if (!userPos) return;
-    setSorted(sortStations(stations, sortKey, userPos.lat, userPos.lon));
+    setSorted(sortStations(stations, sortKey));
   }, [stations, sortKey, userPos]);
 
   // 주유소 데이터 로드
@@ -40,7 +40,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchNearbyStations(lon, lat, r, fuel);
+      const data = await fetchNearbyStations(lat, lon, r, fuel);
       setStations(data);
       setLastUpdated(new Date());
     } catch (e) {
@@ -59,8 +59,7 @@ export default function App() {
       const lat = pos.coords.latitude;
       const lon = pos.coords.longitude;
       setUserPos({ lat, lon });
-      await loadStations(lat, lon, radius, fuelType);
-    } catch (e) {
+      await loadStations(lat, lon, radius, fuelType);    } catch (e) {
       if (e.code === 1) {
         setError('위치 권한이 거부되었습니다. 브라우저 설정에서 위치 접근을 허용해주세요.');
       } else {
@@ -138,8 +137,6 @@ export default function App() {
       {!loading && userPos && (
         <StationList
           stations={sorted}
-          userLat={userPos.lat}
-          userLon={userPos.lon}
           fuelLabel={FUEL_TYPES[fuelType]}
         />
       )}

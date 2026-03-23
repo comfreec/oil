@@ -1,12 +1,11 @@
-import { haversineDistance } from '../api/opinet';
-
-// 브랜드별 색상
 const BRAND_COLORS = {
   'SK에너지': '#e8001c',
   'GS칼텍스': '#00a651',
   'S-OIL': '#ff6600',
   '현대오일뱅크': '#003087',
-  '알뜰주유소': '#6c757d',
+  '자영알뜰': '#6c757d',
+  '고속도로알뜰': '#6c757d',
+  '농협알뜰': '#6c757d',
 };
 
 function getBrandColor(brand) {
@@ -18,12 +17,12 @@ function formatPrice(price) {
   return `${price.toLocaleString()}원`;
 }
 
-function formatDist(km) {
-  if (km < 1) return `${Math.round(km * 1000)}m`;
-  return `${km.toFixed(1)}km`;
+function formatDist(m) {
+  if (m < 1000) return `${Math.round(m)}m`;
+  return `${(m / 1000).toFixed(1)}km`;
 }
 
-export default function StationList({ stations, userLat, userLon, fuelLabel }) {
+export default function StationList({ stations, fuelLabel }) {
   if (!stations.length) {
     return (
       <div className="empty-state">
@@ -34,7 +33,6 @@ export default function StationList({ stations, userLat, userLon, fuelLabel }) {
     );
   }
 
-  // 최저가 계산 (가격 있는 것만)
   const prices = stations.map((s) => s.price).filter(Boolean);
   const minPrice = prices.length ? Math.min(...prices) : null;
 
@@ -42,15 +40,12 @@ export default function StationList({ stations, userLat, userLon, fuelLabel }) {
     <div className="station-list">
       <p className="result-count">총 {stations.length}개 주유소</p>
       {stations.map((station, idx) => {
-        const dist = haversineDistance(userLat, userLon, station.y, station.x);
         const isCheapest = minPrice && station.price === minPrice;
 
         return (
           <div key={station.id} className={`station-card ${isCheapest ? 'cheapest' : ''}`}>
-            {/* 순위 */}
             <div className="rank">{idx + 1}</div>
 
-            {/* 메인 정보 */}
             <div className="station-info">
               <div className="station-header">
                 <span
@@ -59,26 +54,17 @@ export default function StationList({ stations, userLat, userLon, fuelLabel }) {
                 >
                   {station.brand}
                 </span>
-                {station.isSelf && <span className="tag">셀프</span>}
                 {isCheapest && <span className="tag cheapest-tag">최저가</span>}
               </div>
               <h3 className="station-name">{station.name}</h3>
-              <p className="station-address">{station.address}</p>
-
-              {/* 부가 서비스 */}
-              <div className="station-tags">
-                {station.isCarWash && <span className="tag">세차</span>}
-                {station.isCVS && <span className="tag">편의점</span>}
-              </div>
             </div>
 
-            {/* 가격 & 거리 */}
             <div className="station-price-block">
               <div className="fuel-label">{fuelLabel}</div>
               <div className={`price ${isCheapest ? 'price-cheapest' : ''}`}>
                 {formatPrice(station.price)}
               </div>
-              <div className="distance">{formatDist(dist)}</div>
+              <div className="distance">{formatDist(station.distance)}</div>
             </div>
           </div>
         );
